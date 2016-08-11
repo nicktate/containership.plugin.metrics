@@ -66,6 +66,8 @@ module.exports = new ContainershipPlugin({
             );
         };
 
+        let server_retry_count = 0;
+
         const add_prometheus_server = () => {
             const application_name = 'containership-prometheus';
             core.logger.register(application_name);
@@ -74,10 +76,18 @@ module.exports = new ContainershipPlugin({
             available_hosts.push(core.cluster.legiond.get_attributes());
             const follower_hosts = _.filter(available_hosts, (host) => host.mode === 'follower');
 
-            // can't deploy prometheus server if there are no followers, just return
+            // We cannot add application until we have seen atleast one follower to pin the server to
+            // so set exponential backoff (max 60 seconds) until the cluster has connect with a follower
+            // and keep attempting to load the server application
             if (follower_hosts.length === 0) {
+                let timeout = Math.pow(2, server_retry_count) * 1000 + 5000;
+                timeout = timeout < 60000 ? timeout : 60000;
+                setTimeout(add_prometheus_server, timeout);
+                server_retry_count++;
                 return;
             }
+
+            server_retry_count = 0;
 
             core.cluster.myriad.persistence.get(
                     [core.constants.myriad.APPLICATION_PREFIX, application_name].join(core.constants.myriad.DELIMITER),
