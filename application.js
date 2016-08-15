@@ -8,7 +8,7 @@ const ContainershipPlugin = require('containership.plugin');
 module.exports = new ContainershipPlugin({
     type: 'core',
 
-    initialize: function(core){
+    initialize: function(core) {
         const add_prometheus_agents = () => {
             const application_name = 'containership-prometheus-agents';
             core.logger.register(application_name);
@@ -135,7 +135,7 @@ module.exports = new ContainershipPlugin({
                                             }
 
                                             return core.loggers[application_name].log('verbose', `${application_name} container deploy`);
-                                        })
+                                        });
                                     }
                                 });
 
@@ -152,7 +152,7 @@ module.exports = new ContainershipPlugin({
                                     }
 
                                     return core.loggers[application_name].log('verbose', `${application_name} container deploy`);
-                                })
+                                });
                             }
                         });
                     }
