@@ -4,7 +4,8 @@
   "description": "Official metric plugin for ContainerShip",
   "main": "application.js",
   "scripts": {
-    "test": "./node_modules/.bin/mocha"
+    "test": "./node_modules/.bin/mocha",
+    "lint": "./node_modules/.bin/eslint ."
   },
   "author": "ContainerShip Developers <developers@containership.io>",
   "license": "GPL-3.0",
@@ -24,5 +25,8 @@
   "bugs": {
     "url": "https://github.com/containership/containership.plugin.metrics/issues"
   },
-  "homepage": "https://github.com/containership/containership.plugin.metrics"
+  "homepage": "https://github.com/containership/containership.plugin.metrics",
+  "devDependencies": {
+    "eslint": "^3.3.1"
+  }
 }
