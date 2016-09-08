@@ -3,6 +3,7 @@
 const metrics = require('./lib/metrics');
 
 const _ = require('lodash');
+const async = require('async');
 const ContainershipPlugin = require('containership.plugin');
 
 module.exports = new ContainershipPlugin({
@@ -66,7 +67,7 @@ module.exports = new ContainershipPlugin({
             );
         };
 
-        let server_retry_count = 0;
+        let add_prometheus_timeout = null;
 
         const add_prometheus_server = () => {
             const application_name = 'containership-prometheus';
@@ -77,86 +78,134 @@ module.exports = new ContainershipPlugin({
             const follower_hosts = _.filter(available_hosts, (host) => host.mode === 'follower');
 
             // We cannot add application until we have seen atleast one follower to pin the server to
-            // so set exponential backoff (max 60 seconds) until the cluster has connect with a follower
+            // so set 60 second backoff and keep attempting to load server application
             // and keep attempting to load the server application
             if (follower_hosts.length === 0) {
-                let timeout = Math.pow(2, server_retry_count) * 1000 + 5000;
-                timeout = timeout < 60000 ? timeout : 60000;
-                setTimeout(add_prometheus_server, timeout);
-                server_retry_count++;
-                return;
+                return setTimeout(add_prometheus_server, 60000);
             }
 
-            server_retry_count = 0;
+            // 1. check if application exists
+            // 2. create app with constraint (if needed)
+            // 3. check if containers have been deployed
+            // 4. check if existing containers are loaded, if not re-check in 30 seconds
+            // 5. if no containers are loaded, assume host constraint violated, update app, trigger another add_prometheus_check in 1 minute
+            return async.waterfall([
+                function checkIfAppExists(callback) {
+                    return core.cluster.myriad.persistence.get([core.constants.myriad.APPLICATION_PREFIX, application_name].join(core.constants.myriad.DELIMITER), function(err) {
+                        // return false if err was returned because that means app does not exist, true otherwise
+                        return callback(null, err ? false : true);
+                    });
+                },
+                function createAppIfNeeded(exists, callback) {
+                    if (exists) {
+                        return callback();
+                    }
 
-            core.cluster.myriad.persistence.get(
-                    [core.constants.myriad.APPLICATION_PREFIX, application_name].join(core.constants.myriad.DELIMITER),
-                    (err) => {
-                        if(err) {
-                            return core.applications.add({
-                                id: application_name,
-                                image: 'containership/docker-cs-prometheus-server:latest',
-                                cpus: 0.1,
-                                memory: 128, // todo - configure memory based on node size
-                                network_mode: 'host',
-                                tags: {
-                                    // just pick a follower to initially pin the prometheus server to
-                                    host: follower_hosts[0].host_name,
-                                    /*
-                                    constraints: {
-                                        // todo - constraints based on cluster size for redundancy
-                                    },
-                                    */
-                                    metadata: {
-                                        plugin: application_name,
-                                        ancestry: 'containership.plugin'
-                                    }
-                                },
-                                env_vars: {
-                                    // based on 128MB image size (128MB (Available memory) / 3 (Prometheus suggestion) / 1024 (chunk size in bytes);
-                                    PROM_MEMORY_CHUNKS: 44544
-                                },
-                                volumes: [
-                                    {
-                                        host: '/opt/containership/metrics',
-                                        container: '/opt/containership/metrics'
-                                    }
-                                ]
-                            }, () => {
-                                core.loggers[application_name].log('verbose', ['Created ', application_name, '!'].join(''));
+                    const pinned_host = follower_hosts[Math.floor(Math.random() * follower_hosts.length)];
 
-                                core.applications.get_containers(application_name, (err, containers) => {
-                                    // need to deploy a container if not already running
-                                    if (err || !containers || 0 === containers.length) {
-                                        core.applications.deploy_container(application_name, {}, (err) => {
-                                            if (err) {
-                                                // TODO - check if it is because the host constraint is no longer valid and update to a new host
-                                                return core.loggers[application_name].log('error', `${application_name} failed to deploy: ${err.message}`);
-                                            }
-
-                                            return core.loggers[application_name].log('verbose', `${application_name} container deploy`);
-                                        });
-                                    }
-                                });
-
-                            });
+                    return core.applications.add({
+                        id: application_name,
+                        image: 'containership/docker-cs-prometheus-server:latest',
+                        cpus: 0.1,
+                        memory: 128, // todo - configure memory based on node size
+                        network_mode: 'host',
+                        tags: {
+                            host_name: pinned_host.host_name,
+                            metadata: {
+                                plugin: application_name,
+                                ancestry: 'containership.plugin'
+                            }
+                        },
+                        env_vars: {
+                            // based on 128MB image size (128MB (Available memory) / 3 (Prometheus suggestion) / 1024 (chunk size in bytes);
+                            PROM_MEMORY_CHUNKS: 44544
+                        },
+                        volumes: [
+                            {
+                                host: '/opt/containership/metrics',
+                                container: '/opt/containership/metrics'
+                            }
+                        ]
+                    }, () => {
+                        core.loggers[application_name].log('verbose', ['Created ', application_name, '!'].join(''));
+                        return callback();
+                    });
+                },
+                function checkIfContainersExist(callback) {
+                    return core.applications.get_containers(application_name, (err, containers) => {
+                        if (err || !containers || 0 === containers.length) {
+                            return callback(null, []);
                         }
 
-                        return core.applications.get_containers(application_name, (err, containers) => {
-                            // need to deploy a container if not already running
-                            if (err || !containers || 0 === containers.length) {
-                                core.applications.deploy_container(application_name, {}, (err) => {
-                                    if (err) {
-                                        // TODO - check if it is because the host constraint is no longer valid and update to a new host
-                                        return core.loggers[application_name].log('error', `${application_name} failed to deploy: ${err.message}`);
-                                    }
+                        return callback(null, []);
+                    });
+                },
+                function checkIfContainersAreLoaded(containers, callback) {
+                    let loadedContainers = _.filter(containers, container => container.status === 'loaded');
 
-                                    return core.loggers[application_name].log('verbose', `${application_name} container deploy`);
+                    // attempt to check in 30 seconds in-case container was legitimately in process of loading
+                    if (0 === loadedContainers.length) {
+                        return setTimeout(() => {
+                            return core.applications.get_containers(application_name, (err, containers) => {
+                                if (err || !containers || 0 === containers.length) {
+                                    return callback(null, {
+                                        containers_deployed: false,
+                                        containers_loaded: false
+                                    });
+                                }
+
+                                return callback(null, {
+                                    containers_deployed: containers.length > 0,
+                                    containers_loaded: containers.length === loadedContainers.length && containers.length > 0
                                 });
+                            });
+                        }, 30000);
+                    }
+
+                    return callback(null, {
+                        containers_deployed: containers.length > 0,
+                        containers_loaded: containers.length === loadedContainers.length && containers.length > 0
+                    });
+                },
+                function launchContainersIfNeeded(containerInfo, callback) {
+                    // no containers deployed, attempt to deploy
+                    if (!containerInfo.containers_deployed) {
+                        return core.applications.deploy_container(application_name, {}, (err) => {
+                            if (err) {
+                                core.loggers[application_name].log('error', `${application_name} failed to deploy: ${err.message}`);
+                            } else {
+                                core.loggers[application_name].log('verbose', `${application_name} container deploy`);
                             }
+
+                            return callback();
                         });
                     }
-            );
+
+                    // container deployed but not running, try updating application constraint
+                    if (containerInfo.containers_deployed && !containerInfo.containers_loaded) {
+                        const pinned_host = follower_hosts[Math.floor(Math.random() * follower_hosts.length)];
+
+                        return core.applications.add({
+                            id: application_name,
+                            tags: {
+                                host_name: pinned_host.host_name,
+                                metadata: {
+                                    plugin: application_name,
+                                    ancestry: 'containership.plugin'
+                                }
+                            }
+                        }, () => {
+                            return callback();
+                        });
+                    }
+
+                    return callback();
+                }
+            ], () => {
+                // re-check in one minute
+                add_prometheus_timeout = setTimeout(add_prometheus_server, 60000);
+                return;
+            });
         };
 
         if('leader' === core.options.mode) {
@@ -164,6 +213,12 @@ module.exports = new ContainershipPlugin({
                 add_prometheus_server();
                 add_prometheus_agents();
             }
+
+            core.cluster.legiond.on('demoted', () => {
+                if (add_prometheus_timeout) {
+                    clearTimeout(add_prometheus_timeout);
+                }
+            });
 
             core.cluster.legiond.on('promoted', () => {
                 core.cluster.myriad.persistence.keys(core.constants.myriad.APPLICATIONS, (err, applications) => {
