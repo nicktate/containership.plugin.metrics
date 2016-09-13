@@ -118,7 +118,9 @@ module.exports = new ContainershipPlugin({
                         },
                         env_vars: {
                             // based on 128MB image size (128MB (Available memory) / 3 (Prometheus suggestion) / 1024 (chunk size in bytes);
-                            PROM_MEMORY_CHUNKS: 44544
+                            PROM_MEMORY_CHUNKS: 44544,
+                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 44544,
+                            PROM_LOCAL_RETENTION: '360h'
                         },
                         volumes: [
                             {
