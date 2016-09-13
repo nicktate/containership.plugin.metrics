@@ -117,9 +117,14 @@ module.exports = new ContainershipPlugin({
                             }
                         },
                         env_vars: {
-                            // based on 128MB image size (128MB (Available memory) / 3 (Prometheus suggestion) / 1024 (chunk size in bytes);
-                            PROM_MEMORY_CHUNKS: 44544,
-                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 44544,
+                            // Based on 128MB image size (128MB*1024 (Available memory in KiB) / 5 (Prometheus suggestion)
+                            // Since we are at such a low PROM_MEMORY_CHUNK limit, the memory overhead of chunks is outweighed
+                            // by overhead of running prometheus so through tuning & testing, we found that 5000 is a good
+                            // limit for small clusters running prometheus at 128MB
+                            PROM_MEMORY_CHUNKS: 5000,
+
+                            // Prometheus docs suggest 1/2 of the local storage chunks in memory
+                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 2500,
                             PROM_LOCAL_RETENTION: '360h'
                         },
                         volumes: [
