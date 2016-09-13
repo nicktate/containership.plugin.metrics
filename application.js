@@ -107,7 +107,7 @@ module.exports = new ContainershipPlugin({
                         id: application_name,
                         image: 'containership/docker-cs-prometheus-server:latest',
                         cpus: 0.1,
-                        memory: 128, // todo - configure memory based on node size
+                        memory: 256, // todo - configure memory based on node size
                         network_mode: 'host',
                         tags: {
                             host_name: pinned_host.host_name,
@@ -117,15 +117,14 @@ module.exports = new ContainershipPlugin({
                             }
                         },
                         env_vars: {
-                            // Based on 128MB image size (128MB*1024 (Available memory in KiB) / 5 (Prometheus suggestion)
                             // Since we are at such a low PROM_MEMORY_CHUNK limit, the memory overhead of chunks is outweighed
-                            // by overhead of running prometheus so through tuning & testing, we found that 5000 is a good
-                            // limit for small clusters running prometheus at 128MB
-                            PROM_MEMORY_CHUNKS: 5000,
+                            // by overhead of running prometheus so through tuning & testing, we found that 8000 is a good
+                            // limit for small clusters running prometheus at 256MB although
+                            PROM_MEMORY_CHUNKS: 8000,
 
-                            // Prometheus docs suggest 1/2 of the local storage chunks in memory
-                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 2500,
-                            PROM_LOCAL_RETENTION: '360h'
+                            // Prometheus docs suggest 1/2 or slightly higher of the local storage chunks in memory
+                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 4500,
+                            PROM_LOCAL_RETENTION: '360h' // 15 days
                         },
                         volumes: [
                             {
@@ -160,6 +159,9 @@ module.exports = new ContainershipPlugin({
                                         containers_loaded: false
                                     });
                                 }
+
+                                // update loaded containers with newly fetched container list
+                                loadedContainers = _.filter(containers, container => container.status === 'loaded');
 
                                 return callback(null, {
                                     containers_deployed: containers.length > 0,
