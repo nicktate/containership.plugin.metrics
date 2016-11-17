@@ -107,7 +107,7 @@ module.exports = new ContainershipPlugin({
                         id: application_name,
                         image: 'containership/docker-cs-prometheus-server:latest',
                         cpus: 0.1,
-                        memory: 256, // todo - configure memory based on node size
+                        memory: 320, // todo - configure memory based on node size
                         network_mode: 'host',
                         tags: {
                             host_name: pinned_host.host_name,
@@ -117,14 +117,17 @@ module.exports = new ContainershipPlugin({
                             }
                         },
                         env_vars: {
-                            // Since we are at such a low PROM_MEMORY_CHUNK limit, the memory overhead of chunks is outweighed
-                            // by overhead of running prometheus so through tuning & testing, we found that 8000 is a good
-                            // limit for small clusters running prometheus at 256MB although
-                            PROM_MEMORY_CHUNKS: 8000,
+                            PROMETHEUS_STORAGE_LOCAL_MEMORY_CHUNKS: 15000,
+                            PROMETHEUS_STORAGE_LOCAL_MAX_CHUNKS_TO_PERSIST: 8000,
+                            PROMETHEUS_STORAGE_LOCAL_NUM_FINGERPRINT_MUTEXES: 5120,
+                            PROMETHEUS_STORAGE_LOCAL_RETENTION: '168h', // 7 days
 
-                            // Prometheus docs suggest 1/2 or slightly higher of the local storage chunks in memory
-                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 4500,
-                            PROM_LOCAL_RETENTION: '360h' // 15 days
+                            // legacy env variables
+                            PROM_MEMORY_CHUNKS: 15000,
+                            PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 8000,
+                            PROM_LOCAL_RETENTION: '168h' // 7 days
+
+
                         },
                         volumes: [
                             {
