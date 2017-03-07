@@ -20,10 +20,10 @@ module.exports = new ContainershipPlugin({
                         if(err) {
                             return core.applications.add({
                                 id: application_name,
-                                image: 'containership/docker-cs-prometheus-agents:latest',
+                                image: 'containership/prometheus-metric-targets:1.x',
                                 cpus: 0.1,
                                 memory: 64,
-                                network_mode: 'host',
+                                network_mode: 'bridge',
                                 tags: {
                                     constraints: {
                                         per_host: 1
@@ -105,10 +105,11 @@ module.exports = new ContainershipPlugin({
 
                     return core.applications.add({
                         id: application_name,
-                        image: 'containership/docker-cs-prometheus-server:latest',
+                        image: 'containership/prometheus-metric-server:1.x',
                         cpus: 0.1,
                         memory: 320, // todo - configure memory based on node size
-                        network_mode: 'host',
+                        network_mode: 'bridge',
+                        container_port: '9090',
                         tags: {
                             host_name: pinned_host.host_name,
                             metadata: {
@@ -126,8 +127,6 @@ module.exports = new ContainershipPlugin({
                             PROM_MEMORY_CHUNKS: 15000,
                             PROM_MEMORY_MAX_CHUNKS_TO_PERSIST: 8000,
                             PROM_LOCAL_RETENTION: '168h' // 7 days
-
-
                         },
                         volumes: [
                             {
