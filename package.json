@@ -1,17 +1,17 @@
 {
-  "name": "containership.plugin.metrics.v2",
-  "version": "1.0.3",
-  "description": "",
+  "name": "@containership/containership.plugin.metrics",
+  "version": "2.0.0-beta-1",
+  "description": "Containership metrics plugin v2",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@containership/containership.plugin": "git://github.com/containership/containership.plugin#v2",
+    "@containership/containership.plugin": "^2.0.0-beta",
     "lodash": "^4.17.4",
     "querystring": "^0.2.0",
     "request": "^2.81.0"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "Containership Developers <developers@containership.io>",
+  "license": "MIT"
 }
