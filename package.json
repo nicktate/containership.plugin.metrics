@@ -1,13 +1,13 @@
 {
   "name": "@containership/containership.plugin.metrics",
-  "version": "2.0.0-beta-1",
+  "version": "2.0.0-beta-2",
   "description": "Containership metrics plugin v2",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@containership/containership.plugin": "^2.0.0-beta",
+    "@containership/containership.plugin": "^2.0.0-beta-2",
     "lodash": "^4.17.4",
     "querystring": "^0.2.0",
     "request": "^2.81.0"
